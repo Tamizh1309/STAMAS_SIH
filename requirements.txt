@@ -1,0 +1,2 @@
+# Root requirements for Vercel Python runtime (backend deps live in backend/).
+-r backend/requirements.txt

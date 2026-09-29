@@ -1,0 +1,135 @@
+@import "tailwindcss";
+
+/* Class-based dark variant (Tailwind v4 default is media-based). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ---- STAMAS theme tokens: dark preserves the existing identity ---- */
+:root {
+  --t-bg: #edf1f6;
+  --t-card: #ffffff;
+  --t-chip: #e3e9f1;
+  --t-hover: #d5dde8;
+  --t-text-bright: #0f172a;
+  --t-text: #1e293b;
+  --t-text-soft: #334155;
+  --t-muted: #475569;
+  --t-faint: #64748b;
+  --t-border: #dbe2ec;
+  --t-border-strong: #b9c4d4;
+}
+
+.dark {
+  --t-bg: #020617;
+  --t-card: #0f172a;
+  --t-chip: #1e293b;
+  --t-hover: #334155;
+  --t-text-bright: #ffffff;
+  --t-text: #e2e8f0;
+  --t-text-soft: #cbd5e1;
+  --t-muted: #94a3b8;
+  --t-faint: #64748b;
+  --t-border: #1e293b;
+  --t-border-strong: #334155;
+}
+
+body {
+  background-color: var(--t-bg);
+  color: var(--t-text);
+}
+
+/* Text that must stay white on solid accent fills, in both themes. */
+.t-on-accent {
+  color: #fff;
+}
+
+/* Brand bands keep the dark identity in both themes; re-scope tokens inside. */
+.t-dark-band {
+  --t-card: #0f172a;
+  --t-chip: #1e293b;
+  --t-hover: #334155;
+  --t-text-bright: #ffffff;
+  --t-text: #e2e8f0;
+  --t-text-soft: #cbd5e1;
+  --t-muted: #94a3b8;
+  --t-faint: #64748b;
+  --t-border: #1e293b;
+  --t-border-strong: #334155;
+}
+:root:not(.dark) .t-dark-band .text-amber-200 { color: #fde68a; }
+:root:not(.dark) .t-dark-band .text-amber-300 { color: #fcd34a; }
+:root:not(.dark) .t-dark-band .text-amber-400 { color: #fbbf24; }
+:root:not(.dark) .t-dark-band .text-blue-200 { color: #bfdbfe; }
+:root:not(.dark) .t-dark-band .text-blue-300 { color: #93c5fd; }
+:root:not(.dark) .t-dark-band .text-blue-400 { color: #60a5fa; }
+:root:not(.dark) .t-dark-band .text-emerald-200 { color: #a7f3d0; }
+:root:not(.dark) .t-dark-band .text-emerald-300 { color: #6ee7b7; }
+:root:not(.dark) .t-dark-band .text-emerald-400 { color: #34d399; }
+:root:not(.dark) .t-dark-band .text-red-200 { color: #fecaca; }
+:root:not(.dark) .t-dark-band .text-red-300 { color: #fca5a5; }
+:root:not(.dark) .t-dark-band .text-red-400 { color: #f87171; }
+:root:not(.dark) .t-dark-band .text-orange-300 { color: #fdba74; }
+:root:not(.dark) .t-dark-band .text-orange-400 { color: #fb923c; }
+:root:not(.dark) .t-dark-band .text-purple-300 { color: #d8b4fe; }
+:root:not(.dark) .t-dark-band .text-purple-400 { color: #c084fc; }
+
+/* ---- Light-mode contrast fixes for accent text (tinted pills keep their bg) ---- */
+:root:not(.dark) .text-amber-400,
+:root:not(.dark) .text-amber-300,
+:root:not(.dark) .text-amber-200 {
+  color: #b45309;
+}
+:root:not(.dark) .text-blue-400,
+:root:not(.dark) .text-blue-300,
+:root:not(.dark) .text-blue-200 {
+  color: #1d4ed8;
+}
+:root:not(.dark) .text-emerald-400,
+:root:not(.dark) .text-emerald-300,
+:root:not(.dark) .text-emerald-200 {
+  color: #047857;
+}
+:root:not(.dark) .text-red-400,
+:root:not(.dark) .text-red-300,
+:root:not(.dark) .text-red-200 {
+  color: #dc2626;
+}
+:root:not(.dark) .text-orange-400,
+:root:not(.dark) .text-orange-300 {
+  color: #c2410c;
+}
+:root:not(.dark) .text-purple-400,
+:root:not(.dark) .text-purple-300 {
+  color: #7e22ce;
+}
+:root:not(.dark) .text-blue-200 {
+  color: #1e40af;
+}
+:root:not(.dark) .text-emerald-300,
+:root:not(.dark) .text-emerald-200 {
+  color: #065f46;
+}
+:root:not(.dark) .text-amber-200 {
+  color: #92400e;
+}
+:root:not(.dark) .text-red-200 {
+  color: #991b1b;
+}
+/* Primary headings/body copy keep full ink on light surfaces. */
+:root:not(.dark) .text-white {
+  color: var(--t-text-bright);
+}
+
+/* Hide scrollbars for the tab strip while keeping it scrollable (responsive overflow stays inside the nav container). */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Guard against accidental page-level horizontal scroll; sticky header keeps working with `clip`. */
+html,
+body {
+  overflow-x: clip;
+}

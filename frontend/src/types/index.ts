@@ -1,0 +1,264 @@
+export type ClauseCategory = 'Technical' | 'Quality & Testing' | 'Statutory & ESG' | 'Commercial & Warranty';
+
+export type ClauseStatus = 'COMPLIANT' | 'MINOR_DEVIATION' | 'MAJOR_DEVIATION' | 'MISSING_DOC';
+
+export interface Clause {
+  id: string;
+  number: string;
+  title: string;
+  category: ClauseCategory;
+  requiredSpec: string;
+  offeredSpec: string;
+  status: ClauseStatus;
+  riskScore: number; // 1-10
+  standardRef: string;
+  auditorRemarks: string;
+  clarificationRequired: boolean;
+  clarificationDraft?: string;
+  bidderOfferNotes?: string;
+}
+
+export type BidderCategory = 'L1 Bidder' | 'L2 Bidder' | 'L3 Bidder' | 'L4 Bidder' | 'L5 Bidder';
+export type MIIClassification = 'Class-I Local (>=50%)' | 'Class-II Local (20-49%)' | 'Non-Local (<20%)';
+export type MSECategory = 'Micro' | 'Small' | 'Medium' | 'SC/ST' | 'Women';
+export type QualificationStatus = 'QUALIFIED' | 'CONDITIONALLY_QUALIFIED' | 'DISQUALIFIED';
+export type CartelRiskLevel = 'LOW' | 'MEDIUM' | 'HIGH';
+
+export interface Bidder {
+  id: string;
+  name: string;
+  gstin: string;
+  registeredCity: string;
+  state: string;
+  category: BidderCategory;
+  quotedPrice: number;
+  quotedPriceFormatted: string;
+  localContentPercent: number;
+  miiClassification: MIIClassification;
+  isMSE: boolean;
+  mseCategory?: MSECategory;
+  udyamNumber?: string;
+  turnoverLast3Yrs: string;
+  netWorth: string;
+  pqcExperienceMet: boolean;
+  pastCPCLSupplyTrack: string;
+  overallComplianceScore: number;
+  qualificationStatus: QualificationStatus;
+  disqualificationReason?: string;
+  cartelRiskScore: CartelRiskLevel;
+  cartelNotes?: string;
+  submissionTimestamp: string;
+  submissionIpRegion: string;
+  pdfMetadataAuthor: string;
+  evaluatedClauses: Clause[];
+}
+
+export type TenderStatus = 'TECH_EVAL_IN_PROGRESS' | 'EVALUATION_COMPLETED' | 'CLARIFICATION_PERIOD';
+
+export interface TenderSummaryStats {
+  totalBidders: number;
+  qualifiedBidders: number;
+  conditionalBidders: number;
+  disqualifiedBidders: number;
+  avgComplianceScore: number;
+  totalClausesAudited: number;
+  flaggedDeviations: number;
+  cartelAnomalies: number;
+}
+
+export interface Tender {
+  id: string;
+  tenderNo: string;
+  gemBidId: string;
+  title: string;
+  department: string;
+  location: string;
+  estimatedValue: number;
+  estimatedValueFormatted: string;
+  publishedDate: string;
+  bidOpeningDate: string;
+  techEvaluationDeadline: string;
+  status: TenderStatus;
+  minLocalContentRequired: number;
+  emdAmountFormatted: string;
+  pbgPercent: string;
+  bidders: Bidder[];
+  summaryStats: TenderSummaryStats;
+}
+
+export interface Deviation {
+  clause: string;
+  title: string;
+  required: string;
+  offered: string;
+  remark: string;
+}
+
+export interface AnomalyAlert {
+  type: 'COLLUSION_RISK' | 'TECH_SPEC_MISMATCH' | 'STATUTORY_GAP' | 'FINANCIAL_RISK';
+  severity: 'HIGH' | 'MEDIUM' | 'LOW';
+  description: string;
+  remedy: string;
+}
+
+export interface EvaluatedClauseResult {
+  clauseId: string;
+  clauseTitle: string;
+  requiredSpec: string;
+  offeredSpec: string;
+  complianceStatus: ClauseStatus;
+  riskScore: number;
+  auditorRemarks: string;
+  clarificationQuestion?: string;
+}
+
+export interface ComplianceResult {
+  fallback?: boolean;
+  engine?: string;
+  overallComplianceScore: number;
+  qualificationStatus: QualificationStatus;
+  executiveSummary: string;
+  anomalyAlerts?: AnomalyAlert[];
+  evaluatedClauses?: EvaluatedClauseResult[];
+}
+
+export interface CartelAnomaly {
+  biddersInvolved: string[];
+  anomalyType: string;
+  confidenceScore: number;
+  finding: string;
+  recommendedAction: string;
+  safetyNote?: string;
+}
+
+export interface CartelDetectionResult {
+  success: boolean;
+  tenderNo: string;
+  cartelRiskLevel: string;
+  anomalies: CartelAnomaly[];
+  safetyDisclaimer?: string;
+}
+
+export interface SystemHealth {
+  status: string;
+  version: string;
+  psId: string;
+  authority: string;
+  gemApiGateway: string;
+  cvcAuditGuard: string;
+  aiEngine: 'Gemini AI' | 'Local Rule Engine';
+  model?: string;
+  isLiveAI?: boolean;
+  uptimeSeconds: number;
+  timestamp: string;
+}
+
+export interface AnalyticsImpactMetric {
+  metric: string;
+  before: string;
+  after: string;
+  improvement: string;
+  trend: 'up' | 'down';
+  highlight: string;
+}
+
+export interface ProblemBrief {
+  psId: string;
+  title: string;
+  org: string;
+  theme: string;
+  category: string;
+  problemStatement: string;
+  ourSolution: string;
+  targetUsers: Array<{ role: string; need: string }>;
+}
+
+export interface SystemAnalytics {
+  problemBrief: ProblemBrief;
+  impactMetrics: Array<{
+    metric: string;
+    manualEvaluation: string;
+    stamasAi: string;
+    improvement: string;
+    benchmarkSource: string;
+  }>;
+  refinerySavingsAnnual: string;
+  averageScrutinyHours: string;
+  disputeReductionRate: string;
+}
+
+export interface CopilotChatResponse {
+  success: boolean;
+  reply: string;
+  engine?: 'Gemini AI' | 'Local Rule Engine';
+}
+
+export type TenderDocumentStatus = 'STAGED' | 'UPLOADED' | 'FAILED';
+export interface TenderDocument {
+  id: string;
+  tenderId: string;
+  name: string;
+  sizeBytes: number;
+  extension: string;
+  status: TenderDocumentStatus;
+  addedAt: string;
+  note?: string;
+}
+
+export type BackendDocumentStatus = 'UPLOADED' | 'PROCESSING' | 'PROCESSED' | 'FAILED';
+
+export interface BackendDocument {
+  id: string;
+  tenderId: string;
+  fileName: string;
+  fileType: string;
+  mimeType: string;
+  size: number;
+  status: BackendDocumentStatus;
+  uploadedAt: string;
+  extractedTextLength: number;
+  pageCount?: number | null;
+  error?: string | null;
+}
+
+export interface ExtractedTenderClause {
+  id: string;
+  number: string;
+  title: string;
+  text: string;
+  sourceDocumentId: string;
+  sourceDocumentName: string;
+  page?: number | null;
+  section?: string | null;
+}
+
+export type ClauseVerificationStatus =
+  | 'COMPLIANT'
+  | 'NON_COMPLIANT'
+  | 'PARTIALLY_COMPLIANT'
+  | 'NEEDS_CLARIFICATION'
+  | 'NOT_ENOUGH_EVIDENCE';
+
+export interface ClauseVerification {
+  success: boolean;
+  clauseId: string;
+  status: ClauseVerificationStatus;
+  finding: string;
+  evidence: string[];
+  reasoning: string;
+  confidence: number;
+  engine: string;
+  sourceDocumentId: string;
+  sourceDocumentName: string;
+  disclaimer: string;
+}
+
+export interface OpportunityAnalysisRecord {
+  id: string;
+  tenderId: string;
+  documentId: string | null;
+  kind: string;
+  engine: string;
+  result: Record<string, any>;
+  createdAt: string;
+}

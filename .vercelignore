@@ -1,0 +1,10 @@
+# Never deploy secrets, local uploads, or build artifacts to Vercel.
+backend/.env
+backend/storage/
+**/node_modules/
+**/__pycache__/
+**/*.pyc
+backend/.venv/
+frontend/dist/
+*.log
+.DS_Store
