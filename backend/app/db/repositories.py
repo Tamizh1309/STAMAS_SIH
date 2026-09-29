@@ -75,6 +75,50 @@ def _utcnow() -> datetime:
 
 class TenderRepository:
     @staticmethod
+    async def seed_initial_tenders(session: AsyncSession | None) -> None:
+        """Seed canonical mock tenders (e.g. tender-1 CPCL/REF/2026/094) into PostgreSQL if not present."""
+        if session is None:
+            return
+        from .seed_data import MOCK_TENDERS
+        try:
+            for mock in MOCK_TENDERS:
+                existing = await session.get(TenderRow, mock["id"])
+                if existing is None:
+                    by_no = (
+                        await session.execute(
+                            select(TenderRow).where(TenderRow.tender_no == mock["tenderNo"])
+                        )
+                    ).scalars().first()
+                    if by_no is not None:
+                        if by_no.id != mock["id"]:
+                            await session.delete(by_no)
+                            await session.flush()
+                            session.add(
+                                TenderRow(
+                                    id=mock["id"],
+                                    tender_no=mock["tenderNo"],
+                                    data=dict(mock),
+                                )
+                            )
+                        else:
+                            by_no.data = dict(mock)
+                    else:
+                        session.add(
+                            TenderRow(
+                                id=mock["id"],
+                                tender_no=mock["tenderNo"],
+                                data=dict(mock),
+                            )
+                        )
+            await session.commit()
+        except Exception as exc:
+            log.warning("Initial tender seeding skipped: %s", exc)
+            try:
+                await session.rollback()
+            except Exception:
+                pass
+
+    @staticmethod
     async def list_all(session: AsyncSession | None) -> list[dict[str, Any]]:
         if session is not None:
             try:
@@ -83,6 +127,13 @@ class TenderRepository:
                         select(TenderRow).order_by(TenderRow.created_at.desc())
                     )
                 ).scalars().all()
+                if not rows or not any(r.tender_no == "CPCL/REF/2026/094" for r in rows):
+                    await TenderRepository.seed_initial_tenders(session)
+                    rows = (
+                        await session.execute(
+                            select(TenderRow).order_by(TenderRow.created_at.desc())
+                        )
+                    ).scalars().all()
                 return [dict(r.data) for r in rows]
             except Exception as exc:
                 log.error("Database list_all failed: %s", exc)
@@ -94,6 +145,9 @@ class TenderRepository:
         if session is not None:
             try:
                 row = await session.get(TenderRow, tender_id)
+                if row is None and tender_id in ("tender-1", "tender-2", "tender-3"):
+                    await TenderRepository.seed_initial_tenders(session)
+                    row = await session.get(TenderRow, tender_id)
                 if row is not None:
                     return dict(row.data)
                 return None
@@ -111,6 +165,13 @@ class TenderRepository:
                         select(TenderRow).where(TenderRow.tender_no == tender_no)
                     )
                 ).scalars().first()
+                if row is None and tender_no == "CPCL/REF/2026/094":
+                    await TenderRepository.seed_initial_tenders(session)
+                    row = (
+                        await session.execute(
+                            select(TenderRow).where(TenderRow.tender_no == tender_no)
+                        )
+                    ).scalars().first()
                 if row is not None:
                     return dict(row.data)
                 return None

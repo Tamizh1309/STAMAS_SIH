@@ -12,11 +12,17 @@ from .api import system as system_routes
 from .api import tenders as tender_routes
 from .core.config import settings
 from .core.errors import ApiError, api_error_handler, unhandled_error_handler
-from .db.database import dispose_engine
+from .db.database import dispose_engine, session_scope
+from .db.repositories import TenderRepository
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    try:
+        async with session_scope() as session:
+            await TenderRepository.seed_initial_tenders(session)
+    except Exception:
+        pass
     yield
     await dispose_engine()
 
