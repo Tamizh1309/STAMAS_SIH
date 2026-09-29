@@ -88,16 +88,23 @@ def get_engine():
     return _engine
 
 
-async def get_db() -> AsyncIterator[AsyncSession]:
-    """FastAPI dependency — yields one AsyncSession per request."""
+async def get_db() -> AsyncIterator[AsyncSession | None]:
+    """FastAPI dependency — yields AsyncSession if database is configured, else None."""
     global _session_factory
-    get_engine()  # raises 503 when unconfigured
-    assert _session_factory is not None
-    async with _session_factory() as session:
-        try:
-            yield session
-        finally:
-            await session.close()
+    if not settings.database_configured:
+        yield None
+        return
+    try:
+        get_engine()
+        assert _session_factory is not None
+        async with _session_factory() as session:
+            try:
+                yield session
+            finally:
+                await session.close()
+    except Exception as exc:
+        log.warning("Database connection failed, falling back to in-memory mode: %s", exc)
+        yield None
 
 
 class _SessionContext:

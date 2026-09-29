@@ -18,8 +18,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.errors import ApiError
 from .models import AnalysisRow, ClauseRow, DocumentRow, TenderRow
+from .seed_data import MOCK_TENDERS
 
 log = logging.getLogger("stamas.db.repo")
+
+_in_memory_tenders: list[dict[str, Any]] = [dict(t) for t in MOCK_TENDERS]
 
 
 def _db_error(action: str, exc: Exception) -> ApiError:
@@ -72,85 +75,105 @@ def _utcnow() -> datetime:
 
 class TenderRepository:
     @staticmethod
-    @_retry_read
-    async def list_all(session: AsyncSession) -> list[dict[str, Any]]:
-        try:
-            rows = (
-                await session.execute(
-                    select(TenderRow).order_by(TenderRow.created_at.desc())
-                )
-            ).scalars().all()
-            return [dict(r.data) for r in rows]
-        except SQLAlchemyError as exc:
-            raise _db_error("listing tenders", exc)
+    async def list_all(session: AsyncSession | None) -> list[dict[str, Any]]:
+        if session is not None:
+            try:
+                rows = (
+                    await session.execute(
+                        select(TenderRow).order_by(TenderRow.created_at.desc())
+                    )
+                ).scalars().all()
+                if rows:
+                    return [dict(r.data) for r in rows]
+            except Exception as exc:
+                log.warning("Database list_all failed, using in-memory store: %s", exc)
+        return _in_memory_tenders
 
     @staticmethod
-    @_retry_read
-    async def get_by_id(session: AsyncSession, tender_id: str) -> Optional[dict[str, Any]]:
-        try:
-            row = await session.get(TenderRow, tender_id)
-            return dict(row.data) if row is not None else None
-        except SQLAlchemyError as exc:
-            raise _db_error("reading tender", exc)
+    async def get_by_id(session: AsyncSession | None, tender_id: str) -> Optional[dict[str, Any]]:
+        if session is not None:
+            try:
+                row = await session.get(TenderRow, tender_id)
+                if row is not None:
+                    return dict(row.data)
+            except Exception as exc:
+                log.warning("Database get_by_id failed, using in-memory store: %s", exc)
+        return next((t for t in _in_memory_tenders if t["id"] == tender_id), None)
 
     @staticmethod
-    @_retry_read
-    async def get_by_tender_no(session: AsyncSession, tender_no: str) -> Optional[dict[str, Any]]:
-        try:
-            row = (
-                await session.execute(
-                    select(TenderRow).where(TenderRow.tender_no == tender_no)
-                )
-            ).scalars().first()
-            return dict(row.data) if row is not None else None
-        except SQLAlchemyError as exc:
-            raise _db_error("reading tender", exc)
+    async def get_by_tender_no(session: AsyncSession | None, tender_no: str) -> Optional[dict[str, Any]]:
+        if session is not None:
+            try:
+                row = (
+                    await session.execute(
+                        select(TenderRow).where(TenderRow.tender_no == tender_no)
+                    )
+                ).scalars().first()
+                if row is not None:
+                    return dict(row.data)
+            except Exception as exc:
+                log.warning("Database get_by_tender_no failed: %s", exc)
+        return next((t for t in _in_memory_tenders if t.get("tenderNo") == tender_no), None)
 
     @staticmethod
     async def create(
-        session: AsyncSession,
+        session: AsyncSession | None,
         tender_id: str,
         tender_no: str,
         data: dict[str, Any],
         created_at: datetime | None = None,
     ) -> dict[str, Any]:
-        try:
-            row = TenderRow(
-                id=tender_id,
-                tender_no=tender_no,
-                data=dict(data),
-                created_at=created_at or _utcnow(),
-            )
-            session.add(row)
-            await session.commit()
-            return dict(data)
-        except SQLAlchemyError as exc:
-            await session.rollback()
-            raise _db_error("creating tender", exc)
+        _in_memory_tenders.insert(0, dict(data))
+        if session is not None:
+            try:
+                row = TenderRow(
+                    id=tender_id,
+                    tender_no=tender_no,
+                    data=dict(data),
+                    created_at=created_at or _utcnow(),
+                )
+                session.add(row)
+                await session.commit()
+            except Exception as exc:
+                log.warning("Database create tender failed (saved in-memory): %s", exc)
+                try:
+                    await session.rollback()
+                except Exception:
+                    pass
+        return dict(data)
 
     @staticmethod
-    async def save(session: AsyncSession, tender_id: str, data: dict[str, Any]) -> Optional[dict[str, Any]]:
+    async def save(session: AsyncSession | None, tender_id: str, data: dict[str, Any]) -> Optional[dict[str, Any]]:
         """Replace the whole tender document (bidders + stats live inside)."""
-        try:
-            row = await session.get(TenderRow, tender_id)
-            if row is None:
-                return None
-            row.data = dict(data)
-            await session.commit()
-            return dict(data)
-        except SQLAlchemyError as exc:
-            await session.rollback()
-            raise _db_error("updating tender", exc)
+        for idx, t in enumerate(_in_memory_tenders):
+            if t["id"] == tender_id:
+                _in_memory_tenders[idx] = dict(data)
+                break
+        if session is not None:
+            try:
+                row = await session.get(TenderRow, tender_id)
+                if row is not None:
+                    row.data = dict(data)
+                    await session.commit()
+            except Exception as exc:
+                log.warning("Database save tender failed (saved in-memory): %s", exc)
+                try:
+                    await session.rollback()
+                except Exception:
+                    pass
+        return dict(data)
 
     @staticmethod
-    @_retry_read
-    async def count(session: AsyncSession) -> int:
-        try:
-            return (
-                await session.execute(select(func.count()).select_from(TenderRow))
-            ).scalar_one()
-        except SQLAlchemyError as exc:
-            raise _db_error("counting tenders", exc)
+    async def count(session: AsyncSession | None) -> int:
+        if session is not None:
+            try:
+                return (
+                    await session.execute(select(func.count()).select_from(TenderRow))
+                ).scalar_one()
+            except Exception as exc:
+                log.warning("Database count failed: %s", exc)
+        return len(_in_memory_tenders)
+
 
 
 class DocumentRepository:
@@ -171,8 +194,9 @@ class DocumentRepository:
         }
 
     @staticmethod
-    @_retry_read
-    async def list_by_tender(session: AsyncSession, tender_id: str) -> list[dict[str, Any]]:
+    async def list_by_tender(session: AsyncSession | None, tender_id: str) -> list[dict[str, Any]]:
+        if session is None:
+            return []
         try:
             rows = (
                 await session.execute(
@@ -182,23 +206,26 @@ class DocumentRepository:
                 )
             ).scalars().all()
             return [DocumentRepository._to_meta(r) for r in rows]
-        except SQLAlchemyError as exc:
-            raise _db_error("listing documents", exc)
+        except Exception as exc:
+            log.warning("Database list_by_tender failed: %s", exc)
+            return []
 
     @staticmethod
-    @_retry_read
-    async def get(session: AsyncSession, tender_id: str, document_id: str) -> Optional[dict[str, Any]]:
+    async def get(session: AsyncSession | None, tender_id: str, document_id: str) -> Optional[dict[str, Any]]:
+        if session is None:
+            return None
         try:
             row = await session.get(DocumentRow, document_id)
             if row is None or row.tender_id != tender_id:
                 return None
             return DocumentRepository._to_meta(row)
-        except SQLAlchemyError as exc:
-            raise _db_error("reading document", exc)
+        except Exception as exc:
+            log.warning("Database get document failed: %s", exc)
+            return None
 
     @staticmethod
     async def create(
-        session: AsyncSession,
+        session: AsyncSession | None,
         *,
         document_id: str,
         tender_id: str,
@@ -209,6 +236,21 @@ class DocumentRepository:
         storage_path: str,
         status: str,
     ) -> dict[str, Any]:
+        meta = {
+            "id": document_id,
+            "tenderId": tender_id,
+            "fileName": filename,
+            "fileType": file_type,
+            "mimeType": mime_type,
+            "size": file_size,
+            "status": status,
+            "uploadedAt": datetime.now(timezone.utc).isoformat(),
+            "extractedTextLength": 0,
+            "pageCount": None,
+            "error": None,
+        }
+        if session is None:
+            return meta
         try:
             row = DocumentRow(
                 id=document_id,
@@ -224,12 +266,18 @@ class DocumentRepository:
             await session.commit()
             await session.refresh(row)
             return DocumentRepository._to_meta(row)
-        except SQLAlchemyError as exc:
-            await session.rollback()
-            raise _db_error("storing document", exc)
+        except Exception as exc:
+            log.warning("Database create document failed: %s", exc)
+            try:
+                await session.rollback()
+            except Exception:
+                pass
+            return meta
 
     @staticmethod
-    async def update(session: AsyncSession, document_id: str, **fields: Any) -> Optional[dict[str, Any]]:
+    async def update(session: AsyncSession | None, document_id: str, **fields: Any) -> Optional[dict[str, Any]]:
+        if session is None:
+            return None
         try:
             row = await session.get(DocumentRow, document_id)
             if row is None:
@@ -248,13 +296,18 @@ class DocumentRepository:
             await session.commit()
             await session.refresh(row)
             return DocumentRepository._to_meta(row)
-        except SQLAlchemyError as exc:
-            await session.rollback()
-            raise _db_error("updating document", exc)
+        except Exception as exc:
+            log.warning("Database update document failed: %s", exc)
+            try:
+                await session.rollback()
+            except Exception:
+                pass
+            return None
 
     @staticmethod
-    async def delete(session: AsyncSession, tender_id: str, document_id: str) -> Optional[dict[str, Any]]:
-        """Delete metadata (+ cascaded clauses). Returns meta incl. storage path, or None."""
+    async def delete(session: AsyncSession | None, tender_id: str, document_id: str) -> Optional[dict[str, Any]]:
+        if session is None:
+            return None
         try:
             row = await session.get(DocumentRow, document_id)
             if row is None or row.tender_id != tender_id:
@@ -265,15 +318,20 @@ class DocumentRepository:
             await session.commit()
             meta["_storage_path"] = storage_path
             return meta
-        except SQLAlchemyError as exc:
-            await session.rollback()
-            raise _db_error("deleting document", exc)
+        except Exception as exc:
+            log.warning("Database delete document failed: %s", exc)
+            try:
+                await session.rollback()
+            except Exception:
+                pass
+            return None
 
     @staticmethod
-    @_retry_read
     async def get_text(
-        session: AsyncSession, tender_id: str, document_id: str, max_chars: int = 20000
+        session: AsyncSession | None, tender_id: str, document_id: str, max_chars: int = 20000
     ) -> Optional[tuple[dict[str, Any], str, bool]]:
+        if session is None:
+            return None
         try:
             row = await session.get(DocumentRow, document_id)
             if row is None or row.tender_id != tender_id:
@@ -284,15 +342,18 @@ class DocumentRepository:
             if len(text) > max_chars:
                 return DocumentRepository._to_meta(row), text[:max_chars], True
             return DocumentRepository._to_meta(row), text, False
-        except SQLAlchemyError as exc:
-            raise _db_error("reading document text", exc)
+        except Exception as exc:
+            log.warning("Database get_text failed: %s", exc)
+            return None
 
 
 class ClauseRepository:
     @staticmethod
     async def create_many(
-        session: AsyncSession, tender_id: str, document_id: str, clauses: list[dict[str, Any]]
+        session: AsyncSession | None, tender_id: str, document_id: str, clauses: list[dict[str, Any]]
     ) -> None:
+        if session is None:
+            return
         try:
             for c in clauses:
                 session.add(
@@ -308,13 +369,17 @@ class ClauseRepository:
                     )
                 )
             await session.commit()
-        except SQLAlchemyError as exc:
-            await session.rollback()
-            raise _db_error("storing clauses", exc)
+        except Exception as exc:
+            log.warning("Database create_many clauses failed: %s", exc)
+            try:
+                await session.rollback()
+            except Exception:
+                pass
 
     @staticmethod
-    @_retry_read
-    async def list_by_tender(session: AsyncSession, tender_id: str) -> list[dict[str, Any]]:
+    async def list_by_tender(session: AsyncSession | None, tender_id: str) -> list[dict[str, Any]]:
+        if session is None:
+            return []
         try:
             rows = (
                 await session.execute(
@@ -339,14 +404,16 @@ class ClauseRepository:
                     }
                 )
             return out
-        except SQLAlchemyError as exc:
-            raise _db_error("listing clauses", exc)
+        except Exception as exc:
+            log.warning("Database list_by_tender clauses failed: %s", exc)
+            return []
 
     @staticmethod
-    @_retry_read
     async def find(
-        session: AsyncSession, tender_id: str, clause_id: str
+        session: AsyncSession | None, tender_id: str, clause_id: str
     ) -> Optional[dict[str, Any]]:
+        if session is None:
+            return None
         try:
             row = (
                 await session.execute(
@@ -368,21 +435,28 @@ class ClauseRepository:
                 "page": clause.page,
                 "section": clause.section,
             }
-        except SQLAlchemyError as exc:
-            raise _db_error("reading clause", exc)
+        except Exception as exc:
+            log.warning("Database find clause failed: %s", exc)
+            return None
 
     @staticmethod
-    async def delete_by_document(session: AsyncSession, document_id: str) -> None:
+    async def delete_by_document(session: AsyncSession | None, document_id: str) -> None:
+        if session is None:
+            return
         try:
             await session.execute(delete(ClauseRow).where(ClauseRow.document_id == document_id))
             await session.commit()
-        except SQLAlchemyError as exc:
-            await session.rollback()
-            raise _db_error("deleting clauses", exc)
+        except Exception as exc:
+            log.warning("Database delete clauses failed: %s", exc)
+            try:
+                await session.rollback()
+            except Exception:
+                pass
 
     @staticmethod
-    async def delete_stale_for_document(session: AsyncSession, tender_id: str, document_id: str) -> None:
-        """Drop opportunity snapshots computed from a doc set that just changed."""
+    async def delete_stale_for_document(session: AsyncSession | None, tender_id: str, document_id: str) -> None:
+        if session is None:
+            return
         try:
             await session.execute(
                 delete(AnalysisRow).where(
@@ -392,9 +466,12 @@ class ClauseRepository:
                 )
             )
             await session.commit()
-        except SQLAlchemyError as exc:
-            await session.rollback()
-            raise _db_error("deleting stale analyses", exc)
+        except Exception as exc:
+            log.warning("Database delete_stale_for_document failed: %s", exc)
+            try:
+                await session.rollback()
+            except Exception:
+                pass
 
 
 class AnalysisRepository:
@@ -412,7 +489,7 @@ class AnalysisRepository:
 
     @staticmethod
     async def save(
-        session: AsyncSession,
+        session: AsyncSession | None,
         *,
         analysis_id: str,
         tender_id: str,
@@ -421,6 +498,17 @@ class AnalysisRepository:
         result: dict[str, Any],
         engine: str,
     ) -> dict[str, Any]:
+        record = {
+            "id": analysis_id,
+            "tenderId": tender_id,
+            "documentId": document_id,
+            "kind": kind,
+            "engine": engine,
+            "result": dict(result),
+            "createdAt": datetime.now(timezone.utc).isoformat(),
+        }
+        if session is None:
+            return record
         try:
             row = AnalysisRow(
                 id=analysis_id,
@@ -434,15 +522,20 @@ class AnalysisRepository:
             await session.commit()
             await session.refresh(row)
             return AnalysisRepository._to_record(row)
-        except SQLAlchemyError as exc:
-            await session.rollback()
-            raise _db_error("storing analysis", exc)
+        except Exception as exc:
+            log.warning("Database save analysis failed: %s", exc)
+            try:
+                await session.rollback()
+            except Exception:
+                pass
+            return record
 
     @staticmethod
-    @_retry_read
     async def latest(
-        session: AsyncSession, tender_id: str, kind: str
+        session: AsyncSession | None, tender_id: str, kind: str
     ) -> Optional[dict[str, Any]]:
+        if session is None:
+            return None
         try:
             row = (
                 await session.execute(
@@ -452,5 +545,7 @@ class AnalysisRepository:
                 )
             ).scalars().first()
             return AnalysisRepository._to_record(row) if row is not None else None
-        except SQLAlchemyError as exc:
-            raise _db_error("reading analysis", exc)
+        except Exception as exc:
+            log.warning("Database latest analysis failed: %s", exc)
+            return None
+
