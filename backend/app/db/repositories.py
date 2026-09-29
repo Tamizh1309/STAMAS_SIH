@@ -83,11 +83,11 @@ class TenderRepository:
                         select(TenderRow).order_by(TenderRow.created_at.desc())
                     )
                 ).scalars().all()
-                if rows:
-                    return [dict(r.data) for r in rows]
+                return [dict(r.data) for r in rows]
             except Exception as exc:
-                log.warning("Database list_all failed, using in-memory store: %s", exc)
-        return _in_memory_tenders
+                log.error("Database list_all failed: %s", exc)
+                raise ApiError("Failed to fetch tenders from database.", 500)
+        return []
 
     @staticmethod
     async def get_by_id(session: AsyncSession | None, tender_id: str) -> Optional[dict[str, Any]]:
@@ -96,9 +96,11 @@ class TenderRepository:
                 row = await session.get(TenderRow, tender_id)
                 if row is not None:
                     return dict(row.data)
+                return None
             except Exception as exc:
-                log.warning("Database get_by_id failed, using in-memory store: %s", exc)
-        return next((t for t in _in_memory_tenders if t["id"] == tender_id), None)
+                log.error("Database get_by_id failed: %s", exc)
+                raise ApiError("Failed to fetch tender from database.", 500)
+        return None
 
     @staticmethod
     async def get_by_tender_no(session: AsyncSession | None, tender_no: str) -> Optional[dict[str, Any]]:
@@ -111,9 +113,11 @@ class TenderRepository:
                 ).scalars().first()
                 if row is not None:
                     return dict(row.data)
+                return None
             except Exception as exc:
-                log.warning("Database get_by_tender_no failed: %s", exc)
-        return next((t for t in _in_memory_tenders if t.get("tenderNo") == tender_no), None)
+                log.error("Database get_by_tender_no failed: %s", exc)
+                raise ApiError("Failed to fetch tender from database.", 500)
+        return None
 
     @staticmethod
     async def create(
@@ -123,7 +127,6 @@ class TenderRepository:
         data: dict[str, Any],
         created_at: datetime | None = None,
     ) -> dict[str, Any]:
-        _in_memory_tenders.insert(0, dict(data))
         if session is not None:
             try:
                 row = TenderRow(
@@ -134,21 +137,20 @@ class TenderRepository:
                 )
                 session.add(row)
                 await session.commit()
+            except IntegrityError:
+                await session.rollback()
+                raise ApiError(
+                    f"A tender with number \"{tender_no}\" already exists.", 409
+                )
             except Exception as exc:
-                log.warning("Database create tender failed (saved in-memory): %s", exc)
-                try:
-                    await session.rollback()
-                except Exception:
-                    pass
+                log.error("Database create tender failed: %s", exc)
+                await session.rollback()
+                raise ApiError("Failed to save tender to database.", 500)
         return dict(data)
 
     @staticmethod
     async def save(session: AsyncSession | None, tender_id: str, data: dict[str, Any]) -> Optional[dict[str, Any]]:
         """Replace the whole tender document (bidders + stats live inside)."""
-        for idx, t in enumerate(_in_memory_tenders):
-            if t["id"] == tender_id:
-                _in_memory_tenders[idx] = dict(data)
-                break
         if session is not None:
             try:
                 row = await session.get(TenderRow, tender_id)
@@ -156,11 +158,9 @@ class TenderRepository:
                     row.data = dict(data)
                     await session.commit()
             except Exception as exc:
-                log.warning("Database save tender failed (saved in-memory): %s", exc)
-                try:
-                    await session.rollback()
-                except Exception:
-                    pass
+                log.error("Database save tender failed: %s", exc)
+                await session.rollback()
+                raise ApiError("Failed to update tender in database.", 500)
         return dict(data)
 
     @staticmethod
@@ -172,7 +172,8 @@ class TenderRepository:
                 ).scalar_one()
             except Exception as exc:
                 log.warning("Database count failed: %s", exc)
-        return len(_in_memory_tenders)
+                return 0
+        return 0
 
 
 

@@ -16,6 +16,7 @@ from urllib.parse import parse_qsl, urlsplit, urlunsplit
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
 
 from ..core.config import settings
 from ..core.errors import ApiError
@@ -28,12 +29,14 @@ _session_factory: async_sessionmaker[AsyncSession] | None = None
 
 def _normalize_dsn(raw: str) -> tuple[str, dict]:
     """Return (asyncpg-safe DSN, connect_args) for a Neon-style URL."""
-    url = raw.strip()
-    if url.startswith("postgresql://"):
+    url = raw.strip().strip("'").strip('"')
+    if url.startswith("postgres://"):
+        url = "postgresql+asyncpg://" + url[len("postgres://"):]
+    elif url.startswith("postgresql://"):
         url = "postgresql+asyncpg://" + url[len("postgresql://"):]
     if not url.startswith("postgresql+asyncpg://"):
         raise ApiError(
-            "DATABASE_URL must use the postgresql+asyncpg:// scheme.", 500
+            "DATABASE_URL must use the postgresql+asyncpg:// or postgresql:// scheme.", 500
         )
     parts = urlsplit(url)
     query = dict(parse_qsl(parts.query, keep_blank_values=True))
@@ -58,24 +61,20 @@ def _normalize_dsn(raw: str) -> tuple[str, dict]:
 
 
 def get_engine():
-    """Lazily create (and cache) the async engine. Raises 503 if unconfigured."""
+    """Lazily create (and cache) the async engine with NullPool for serverless."""
     global _engine, _session_factory
     if _engine is not None:
         return _engine
     if not settings.database_configured:
         raise ApiError(
-            "Database is not configured. Set DATABASE_URL in backend/.env.", 503
+            "Database is not configured. Set DATABASE_URL in environment.", 503
         )
     dsn, connect_args = _normalize_dsn(settings.DATABASE_URL)
     try:
         _engine = create_async_engine(
             dsn,
             connect_args=connect_args,
-            pool_size=5,
-            max_overflow=10,
-            pool_timeout=30,
-            pool_pre_ping=True,
-            pool_recycle=300,
+            poolclass=NullPool,
         )
         _session_factory = async_sessionmaker(
             _engine, class_=AsyncSession, expire_on_commit=False
@@ -84,7 +83,7 @@ def get_engine():
         raise
     except Exception as exc:
         log.error("Failed to create database engine: %s", type(exc).__name__)
-        raise ApiError("Database unavailable. Try again shortly.", 503)
+        raise ApiError(f"Database unavailable: {type(exc).__name__}", 503)
     return _engine
 
 

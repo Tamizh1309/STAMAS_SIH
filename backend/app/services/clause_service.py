@@ -23,7 +23,10 @@ KEYWORD_HEADINGS = [
     "penalty", "liquidated damages", "safety", "hse", "documentation",
 ]
 
-_NUMBER_RE = re.compile(r"^(\d+(?:\.\d+)*\.?|[A-Z]\.|[IVX]{1,5}\.)\s+(.{3,120})$")
+_NUMBER_RE = re.compile(
+    r"^(?:(?:Clause|Section|Article)\s+)?(\d+(?:\.\d+)*\.?|[A-Z]\.|[IVX]{1,5}\.)(?:\s*[:\-]\s*|\s+)(.{3,120})$",
+    re.IGNORECASE,
+)
 _MD_HEADING_RE = re.compile(r"^##\s+(.{3,160})$")
 _MARKER_RE = re.compile(r"^\[(Page \d+|Sheet: [^\]]+)\]\s*$")
 _TITLE_LEAD_RE = re.compile(r"^[A-Za-z]")
