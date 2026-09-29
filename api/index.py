@@ -18,8 +18,8 @@ for path in (str(backend_dir), str(root_dir)):
 
 # Import the real FastAPI application directly (no masking fallback)
 try:
-    from app.main import app  # noqa: E402
+    from backend.app.main import app  # type: ignore[import-not-found] # noqa: E402
 except ImportError:
-    from backend.app.main import app  # noqa: E402
+    from app.main import app  # type: ignore[import-not-found] # noqa: E402
 
 __all__ = ["app"]
