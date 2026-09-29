@@ -1,2 +1,13 @@
-# Root requirements for Vercel Python runtime (backend deps live in backend/).
--r backend/requirements.txt
+fastapi>=0.115
+uvicorn[standard]>=0.30
+pydantic>=2.7
+python-dotenv>=1.0
+google-genai>=1.0
+python-multipart>=0.0.18
+PyMuPDF>=1.24
+python-docx>=1.1
+openpyxl>=3.1
+xlrd>=2.0
+sqlalchemy>=2.0
+asyncpg>=0.29
+alembic>=1.13
