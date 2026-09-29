@@ -19,7 +19,7 @@ for p in [str(backend_dir), str(cwd_backend), str(root_dir), os.getcwd()]:
 
 try:
     from app.main import app  # noqa: E402,F401
-except ImportError:
+except Exception:
     try:
         from backend.app.main import app  # noqa: E402,F401
     except Exception as exc:
