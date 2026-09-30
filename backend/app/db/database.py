@@ -96,14 +96,13 @@ async def get_db() -> AsyncIterator[AsyncSession | None]:
     try:
         get_engine()
         assert _session_factory is not None
-        async with _session_factory() as session:
-            try:
-                yield session
-            finally:
-                await session.close()
     except Exception as exc:
-        log.warning("Database connection failed, falling back to in-memory mode: %s", exc)
+        log.warning("Database engine/session initialization failed, falling back to in-memory mode: %s", exc)
         yield None
+        return
+
+    async with _session_factory() as session:
+        yield session
 
 
 class _SessionContext:

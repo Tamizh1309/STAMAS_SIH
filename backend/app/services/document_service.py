@@ -47,8 +47,14 @@ def storage_dir() -> Path:
         # resolve relative to the backend/ directory (parent of app/)
         backend_dir = Path(__file__).resolve().parents[2]
         p = backend_dir / raw
-    p.mkdir(parents=True, exist_ok=True)
-    return p
+    try:
+        p.mkdir(parents=True, exist_ok=True)
+        return p
+    except Exception as exc:
+        log.warning("Storage directory %s unavailable (%s), falling back to /tmp/storage/documents", p, exc)
+        fallback = Path("/tmp/storage/documents")
+        fallback.mkdir(parents=True, exist_ok=True)
+        return fallback
 
 
 def safe_server_filename(original: str, doc_id: str, ext: str) -> str:

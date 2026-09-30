@@ -1,4 +1,5 @@
-"""Tender routes — thin handlers over tender_service."""
+import logging
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -6,6 +7,7 @@ from ..db.database import get_db
 from ..schemas.tender import CreateTenderRequest, IngestBidRequest
 from ..services import tender_service
 
+log = logging.getLogger("stamas.tenders")
 router = APIRouter(tags=["tenders"])
 
 
@@ -15,6 +17,7 @@ router = APIRouter(tags=["tenders"])
     description="Returns every tender with bidders and summary stats.",
 )
 async def list_tenders(db: AsyncSession = Depends(get_db)):
+    log.info("Fetching tender list")
     tenders = await tender_service.list_tenders(db)
     return {"success": True, "data": tenders, "count": len(tenders)}
 
