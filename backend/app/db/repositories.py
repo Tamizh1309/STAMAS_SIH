@@ -236,6 +236,23 @@ class TenderRepository:
                 return 0
         return 0
 
+    @staticmethod
+    async def delete(session: AsyncSession | None, tender_id: str) -> bool:
+        if session is not None:
+            try:
+                row = await session.get(TenderRow, tender_id)
+                if row is not None:
+                    await session.delete(row)
+                    await session.commit()
+                    return True
+            except Exception as exc:
+                log.warning("Database delete tender failed: %s", exc)
+                try:
+                    await session.rollback()
+                except Exception:
+                    pass
+        return False
+
 
 
 class DocumentRepository:
